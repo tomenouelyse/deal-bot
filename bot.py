@@ -343,8 +343,8 @@ if __name__ == "__main__":
     print("🤖 Démarrage du bot Dealabs...")
 
     # --- NOUVELLE PARTIE : CONNEXION À SUPABASE ---
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY")
+    supabase_url = os.getenv("SUPABASE_URL", "https://onfdyanegbttxrmhdyqp.supabase.co")
+    supabase_key = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9uZmR5YW5lZ2J0dHhybWhkeXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNTg3NjEsImV4cCI6MjA3MDkzNDc2MX0.X7zwaCcCH0CVaSxrfAhDlk56NtcoQiN2R9PnmP7Oq9s")
     
     # Vérifie si les secrets sont bien configurés
     if not supabase_url or not supabase_key:

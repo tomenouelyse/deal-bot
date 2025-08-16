@@ -24,7 +24,10 @@ jobs:
           pip install requests beautifulsoup4 supabase
 
       - name: Run scraper
-        run: python bot.py
+        # --- C'EST LA PARTIE IMPORTANTE À AJOUTER/CORRIGER ---
         env:
-          # On injecte le secret dans le script
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python bot.py
+        # --- FIN DE LA PARTIE IMPORTANTE ---
