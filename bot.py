@@ -1,15 +1,17 @@
 # Étape 1 : Importer les bibliothèques dont on a besoin
+import os
 import requests
 from bs4 import BeautifulSoup
 import time
 import random
+from supabase import create_client, Client 
 
 # Étape 2 : Configurer nos variables
 DEALABS_URL = "https://www.dealabs.com/hot"
 
 # ATTENTION : J'ai masqué votre webhook Discord pour la sécurité
 # Remplacez par votre vraie URL de webhook
-DISCORD_WEBHOOK_URL = "https://discordapp.com/api/webhooks/1406262114183807146/BHrmH-9KbJfd-e6bHz9ScTnS7VuwL7NDnlArqWxoE86IO4RGiArnT9oOy5v0Mu4WPq2x"
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "https://discordapp.com/api/webhooks/1406262114183807146/BHrmH-9KbJfd-e6bHz9ScTnS7VuwL7NDnlArqWxoE86IO4RGiArnT9oOy5v0Mu4WPq2x")
 
 # NOUVEAUX PARAMÈTRES DE FILTRAGE
 TEMPERATURE_MINIMUM = 100  # Température minimum pour envoyer un deal
@@ -336,51 +338,42 @@ def debug_page_structure():
     except Exception as e:
         print(f"❌ Erreur lors du debug : {e}")
 
-# --- Le Programme Principal - VERSION CORRIGÉE ---
+# --- LE PROGRAMME PRINCIPAL - VERSION SUPABASE ---
 if __name__ == "__main__":
     print("🤖 Démarrage du bot Dealabs...")
-    
-    # Vérification de la configuration du webhook
-    if "VOTRE_WEBHOOK" in DISCORD_WEBHOOK_URL or len(DISCORD_WEBHOOK_URL) < 30:
-        print("⚠️  ATTENTION: Vous devez configurer votre URL de webhook Discord!")
-        print("   Éditez la variable DISCORD_WEBHOOK_URL dans le code.")
-        exit(1) # Arrête le script si le webhook n'est pas configuré
-    
-    # Décommentez la ligne suivante pour activer le mode debug
-    # debug_page_structure()
 
-    # --- GESTION DE LA MÉMOIRE ---
-    DEALS_MEMOIRE_FICHIER = "deals_envoyes.txt"
-    deals_deja_envoyes = []
-    try:
-        with open(DEALS_MEMOIRE_FICHIER, "r", encoding="utf-8") as f:
-            deals_deja_envoyes = [line.strip() for line in f.readlines()]
-    except FileNotFoundError:
-        print("📄 Fichier mémoire non trouvé, il sera créé.")
+    # --- NOUVELLE PARTIE : CONNEXION À SUPABASE ---
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
     
-    print(f"🧠 Mémoire chargée : {len(deals_deja_envoyes)} deals ont déjà été envoyés.")
-    print(f"🌡️ Seuil de température : {TEMPERATURE_MINIMUM}°")
+    # Vérifie si les secrets sont bien configurés
+    if not supabase_url or not supabase_key:
+        print("❌ ERREUR: Les secrets SUPABASE_URL et SUPABASE_KEY ne sont pas configurés.")
+        exit(1)
+        
+    supabase: Client = create_client(supabase_url, supabase_key)
+    print("✅ Connecté à la base de données Supabase.")
 
-    # ✅ LIGNE CORRIGÉE : 3 valeurs au lieu de 2
     titre_du_deal, lien_du_deal, temperature_du_deal = scraper_dealabs()
 
-    # --- LOGIQUE DE DÉCISION ---
     if titre_du_deal and lien_du_deal:
-        if lien_du_deal not in deals_deja_envoyes:
-            temp_emoji = get_temperature_emoji(temperature_du_deal)
-            print(f"✨ Nouveau deal {temp_emoji} trouvé ({temperature_du_deal}°) ! Envoi en cours...")
+        # Vérifier si le lien existe déjà dans la base de données
+        response = supabase.table('deals_envoyes').select('id').eq('deal_link', lien_du_deal).execute()
+        
+        # Si la réponse contient des données, c'est qu'on l'a déjà envoyé
+        if len(response.data) == 0:
+            print(f"✨ Nouveau deal trouvé ! Envoi en cours...")
             success = envoyer_notification_discord(titre_du_deal, lien_du_deal, temperature_du_deal)
             
             if success:
-                # Ajoute le lien au fichier mémoire APRÈS l'envoi réussi
-                with open(DEALS_MEMOIRE_FICHIER, "a", encoding="utf-8") as f:
-                    f.write(lien_du_deal + "\n")
-                print("💾 Deal sauvegardé en mémoire.")
+                # Insérer le nouveau lien dans la table Supabase
+                supabase.table('deals_envoyes').insert({"deal_link": lien_du_deal}).execute()
+                print("💾 Deal sauvegardé dans la base de données.")
                 print("🎉 Mission accomplie !")
             else:
                 print("⚠️  Deal trouvé mais erreur lors de l'envoi à Discord.")
         else:
-            print(f"🥱 Ce deal ({temperature_du_deal}°) a déjà été envoyé. On l'ignore.")
+            print(f"🥱 Ce deal a déjà été envoyé (trouvé en BDD). On l'ignore.")
     else:
         print("❌ Aucun deal à envoyer.")
         print(f"💡 Seuil de température actuel : {TEMPERATURE_MINIMUM}°")
