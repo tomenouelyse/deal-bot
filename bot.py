@@ -11,9 +11,9 @@ from supabase import create_client, Client
 DEALABS_URL = "https://www.dealabs.com/hot"
 
 # Configuration des secrets via variables d'environnement
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "https://discordapp.com/api/webhooks/1406262114183807146/BHrmH-9KbJfd-e6bHz9ScTnS7VuwL7NDnlArqWxoE86IO4RGiArnT9oOy5v0Mu4WPq2x")
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://onfdyanegbttxrmhdyqp.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9uZmR5YW5lZ2J0dHhybWhkeXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNTg3NjEsImV4cCI6MjA3MDkzNDc2MX0.X7zwaCcCH0CVaSxrfAhDlk56NtcoQiN2R9PnmP7Oq9s")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # PARAMÈTRES DE FILTRAGE
 TEMPERATURE_MINIMUM = 100  # Température minimum pour traiter un deal
