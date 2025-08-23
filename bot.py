@@ -11,9 +11,9 @@ from supabase import create_client, Client
 DEALABS_URL = "https://www.dealabs.com/hot"
 
 # Configuration des secrets via variables d'environnement
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "https://discordapp.com/api/webhooks/1406262114183807146/BHrmH-9KbJfd-e6bHz9ScTnS7VuwL7NDnlArqWxoE86IO4RGiArnT9oOy5v0Mu4WPq2x")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://onfdyanegbttxrmhdyqp.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9uZmR5YW5lZ2J0dHhybWhkeXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNTg3NjEsImV4cCI6MjA3MDkzNDc2MX0.X7zwaCcCH0CVaSxrfAhDlk56NtcoQiN2R9PnmP7Oq9s")
 
 # PARAMÈTRES DE FILTRAGE
 TEMPERATURE_MINIMUM = 100  # Température minimum pour traiter un deal
@@ -215,18 +215,22 @@ def deal_existe_en_bdd(supabase, deal_link):
     Vérifie si un deal existe déjà en base de données
     """
     try:
-        response = supabase.table('deals_envoyes').select('id').eq('deal_link', deal_link).execute()
+        print(f"🔍 Vérification en BDD pour : {deal_link[:60]}...")
+        
+        response = supabase.table('deals_envoyes').select('id, titre').eq('deal_link', deal_link).execute()
         existe = len(response.data) > 0
         
         if existe:
-            print("🥱 Deal déjà traité (trouvé en BDD)")
+            deal_info = response.data[0]
+            print(f"🥱 Deal déjà traité : '{deal_info.get('titre', 'Sans titre')[:50]}...'")
+            return True
         else:
-            print("✨ Nouveau deal détecté !")
+            print("✨ Nouveau deal détecté, pas encore en BDD !")
+            return False
             
-        return existe
-        
     except Exception as e:
         print(f"❌ Erreur BDD lors de la vérification : {e}")
+        print("⚠️  Par précaution, on considère le deal comme existant pour éviter les doublons")
         return True  # En cas d'erreur, on considère qu'il existe pour éviter les doublons
 
 def recuperer_lien_marchand(url_dealabs):
@@ -358,11 +362,11 @@ def sauvegarder_deal_traite(supabase, deal_link, titre="", temperature=0):
         data = {
             "deal_link": deal_link,
             "titre": titre[:200],  # Limiter la longueur
-            "temperature": temperature,
-            "traite_le": "now()"
+            "temperature": temperature
         }
         
-        supabase.table('deals_envoyes').insert(data).execute()
+        # Utiliser upsert pour éviter les erreurs de doublons
+        result = supabase.table('deals_envoyes').upsert(data).execute()
         print("💾 Deal sauvegardé en base de données")
         return True
         
@@ -426,7 +430,7 @@ if __name__ == "__main__":
     # Décommentez pour debug
     # debug_page_structure()
     
-    # --- WORKFLOW PRINCIPAL ---
+    # --- WORKFLOW PRINCIPAL AVEC PROTECTION ANTI-DOUBLON ---
     # 1. Trouver un deal
     titre, lien_dealabs, temperature = scraper_dealabs()
     
@@ -434,26 +438,33 @@ if __name__ == "__main__":
         print("❌ Aucun deal trouvé")
         exit(0)
     
-    # 2. Vérifier s'il est nouveau
+    # 2. VÉRIFICATION CRITIQUE : Le deal est-il nouveau ?
     if deal_existe_en_bdd(supabase, lien_dealabs):
-        print("🛑 Deal déjà traité, arrêt du processus")
+        print("🛑 Deal déjà traité, arrêt du processus pour éviter doublon")
         exit(0)
     
-    # 3. Récupérer le lien marchand
+    # 3. SAUVEGARDE IMMÉDIATE pour réserver le deal (évite les doublons en parallèle)
+    print("🔒 Réservation du deal en BDD...")
+    if not sauvegarder_deal_traite(supabase, lien_dealabs, titre, temperature):
+        print("❌ Impossible de réserver le deal, arrêt pour éviter les conflits")
+        exit(1)
+    
+    # 4. Récupérer le lien marchand
     lien_marchand = recuperer_lien_marchand(lien_dealabs)
     
-    # 4. Le transformer en lien affilié si possible
+    # 5. Le transformer en lien affilié si possible
     lien_final = transformer_en_lien_affilie(lien_marchand) if lien_marchand else lien_dealabs
     
-    # 5. Envoyer la notification
+    # 6. Envoyer la notification
     temp_emoji = get_temperature_emoji(temperature)
     print(f"📤 Envoi du deal {temp_emoji} ({temperature}°)...")
     
     success = envoyer_notification_discord(titre, lien_final, temperature)
     
-    # 6. Sauvegarder le traitement
+    # 7. Résultat final
     if success:
-        sauvegarder_deal_traite(supabase, lien_dealabs, titre, temperature)
-        print("🎉 Mission accomplie ! Deal envoyé et sauvegardé")
+        print("🎉 Mission accomplie ! Deal envoyé et déjà sauvegardé")
     else:
-        print("⚠️ Erreur lors de l'envoi, deal non sauvegardé")
+        print("⚠️ Erreur lors de l'envoi Discord, mais deal déjà sauvegardé (pas de doublon)")
+        # Note: On ne supprime pas de la BDD même si l'envoi échoue
+        # pour éviter de re-essayer le même deal plus tard
